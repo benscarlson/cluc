@@ -1,0 +1,11 @@
+range_names,env_names
+present,history_2020
+rcp26_2011,ssp1_26_2030
+rcp26_2041,ssp1_26_2050
+rcp26_2071,ssp1_26_2100
+rcp70_2011,ssp3_70_2030
+rcp70_2041,ssp3_70_2050
+rcp70_2071,ssp3_70_2100
+rcp85_2011,ssp5_85_2030
+rcp85_2041,ssp5_85_2050
+rcp85_2071,ssp5_85_2100

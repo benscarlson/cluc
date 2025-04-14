@@ -1,0 +1,1171 @@
+---
+title: "Report"
+format: 
+  html:
+    self-contained: true
+    fig-format: jpeg
+execute: 
+  echo: false
+  message: false
+  warning: false
+params:
+  pd: ~/projects/gpta
+  wd: NULL
+  
+---
+
+```{r setup}
+#| include: false
+
+#Note interactive() is FALSE when clicking the render button
+if(interactive()) {
+  .pd <- '~/projects/gpta'
+  #.wd <- file.path(.pd,'analysis/poc/cluc/attribution_pct/random_1k')
+  
+} else {
+  .pd <- params$pd
+  .wd <- params$wd
+}
+
+#---- Initialize Environment ----#
+source(file.path(.pd,'src/startup.r'))
+
+#invisible(assert_that(!is.null(.wd)))
+
+#---- Libraries ----
+suppressWarnings(
+  suppressPackageStartupMessages({
+    library(arrow)
+    library(knitr)
+    library(patchwork)
+    library(terra)
+  }))
+
+tic() #For report execution time
+
+#Source all files in the auto load funs directory
+list.files(file.path(.pd,'src/funs/auto'),full.names=TRUE) %>% walk(source)
+theme_set(theme_minimal(base_size=15))
+
+#---- Local functions ----
+
+#---- Local parameters ----
+
+#---- Files and folders ----
+
+#---- Initialize database ----#
+
+#---- Load data ----
+message('Loading data...')
+
+```
+
+```{r}
+# Compute the mode across over all species
+# Find the extent of all species
+# 
+
+#x <- readRDS('/Users/benc/projects/gpta/data/bien_ranges/worldShpMollwide.rds')
+
+#This looks it can be used as template grid 
+grid0 <- rast('/Users/benc/projects/gpta/data/bien_ranges/GlobalEcoregions.tif')
+
+range_mf <- open_dataset(wd('data/scenario1/attribution_ranges/pq'))
+
+range_f <- range_mf %>% collect
+
+# Get one layer 
+rng <- rast(wd('data/scenario1/attribution_ranges/tifs',range_f$path[[1]]))[[1]]
+
+round(origin(rng),4)==round(origin(grid),4)
+res(rng)==res(grid)
+crs(rng)==crs(grid)
+
+rng_ext <- extend(rng,ext(grid))
+
+values(rng,dataframe=TRUE) %>% as_tibble(rownames='cell_id')
+
+values(rng_ext,dataframe=TRUE) %>% as_tibble(rownames='cell_id')
+
+grid <- grid0
+values(grid) <- 1:ncell(grid)
+
+#c(grid,rng)
+
+pts <- crds(rng, df = TRUE)
+grid_cell_ids <- cellFromXY(grid0, pts)
+
+# Extract the values from rng (assuming a single layer).
+rng_values <- values(rng)[, 1]
+
+# Combine into a tibble.
+df <- tibble(cell_id = grid_cell_ids, rng_value = rng_values)
+
+#======
+# This approach seems to work
+sp_name <- range_f$spp[[1]]
+rng <- rast(wd('data/scenario1/attribution_ranges/tifs',range_f$path[[1]]))
+
+grid <- setValues(grid0,1:ncell(grid0))
+
+pts <- as.data.frame(rng,xy=TRUE)
+pts$cell_id <- cellFromXY(grid,pts[,c('x','y')])
+rng_tbl <- as_tibble(pts) %>% select(cell_id,everything(),-c(x,y)) %>%
+  pivot_longer(cols=-cell_id,names_to='layer_name',values_to='reason') %>%
+  drop_na %>%
+  select(layer_name,cell_id,reason) %>%
+  mutate(spp=sp_name,.before=1) %>%
+  arrange(layer_name,cell_id)
+
+pqF <- glue("{gsub(' ','_',sp_name)}.parquet")
+write_parquet(rng_tbl,wd(pqF))
+saveRDS(rng_tbl,wd(glue("{gsub(' ','_',sp_name)}.rds")))
+```
+
+Save as a parquet dataset
+Note: when I ran, this, only 4500 of the 10k species completed, so the pq files
+only have that many species
+
+```{r}
+
+#==== USE THIS ---> Same as above but in a loop
+
+.wd <- file.path(.pd,'analysis/poc/cluc/attribution_pct/random_10k')
+wd <- function(...) file.path(.wd,...)
+
+range_mf <- open_dataset(wd('data/scenario1/attribution_ranges/pq'))
+
+range_f <- range_mf %>% collect
+
+#This looks it can be used as template grid 
+grid0 <- rast('/Users/benc/projects/gpta/data/bien_ranges/GlobalEcoregions.tif')
+
+grid <- setValues(grid0,1:ncell(grid0))
+
+out <- 'data/attribution_ranges_pq'
+dir.create(wd(out),recursive=TRUE,showWarnings=FALSE)
+
+tic()
+for(i in 1:nrow(range_f)) {
+  # i <- 1
+  if(i == 1 | i %% 100 == 0) {
+    cat(glue('{i}..'))
+  }
+
+  row <- range_f[i,]
+
+  rng <- rast(wd('data/scenario1/attribution_ranges/tifs',row$path))
+  
+  pts <- as.data.frame(rng,xy=TRUE)
+  
+  pts$cell_id <- cellFromXY(grid,pts[,c('x','y')])
+  
+  rng_tbl <- as_tibble(pts) %>% 
+    select(cell_id,everything(),-c(x,y)) %>%
+    pivot_longer(cols=-cell_id,names_to='layer_name',values_to='reason') %>%
+    drop_na %>%
+    select(layer_name,cell_id,reason) %>%
+    #mutate(spp=row$spp,.before=1) %>%
+    arrange(layer_name,cell_id)
+  
+  pqF <- glue("{gsub(' ','_',row$spp)}.parquet")
+  write_parquet(rng_tbl,wd(out,pqF))
+}
+toc()
+
+```
+
+Duckdb version of above
+TODO: store the species name, year, and rcp
+
+```{r}
+
+.wd <- file.path(.pd,'analysis/poc/cluc/attribution_pct/random_10k')
+wd <- function(...) file.path(.wd,...)
+
+range_mf <- open_dataset(wd('data/scenario3/attribution_ranges/pq'))
+
+range_f <- range_mf %>% collect
+
+nrow(range_f)
+
+#This looks it can be used as template grid 
+grid0 <- rast('/Users/benc/projects/gpta/data/bien_ranges/GlobalEcoregions.tif')
+
+grid <- setValues(grid0,1:ncell(grid0))
+
+out <- 'data/attribution_ranges_ddb'
+dir.create(wd(out),recursive=TRUE,showWarnings=FALSE)
+
+library(duckdb)
+con <- dbConnect(duckdb::duckdb(), dbdir = wd(out,"attribution_ranges.duckdb"), read_only = FALSE)
+
+dbExecute(con, "
+  CREATE TABLE IF NOT EXISTS attribution (
+    layer_name usmallint,
+    cell_id    uinteger,
+    reason     utinyint
+  )")
+
+# 4500 spp in 6 min, so about the same as parquet
+# Did <10k also in ~6 min, strange. Did this without an active transaction.
+# Compare with and without transaction
+# duckdb size: 534 MB
+# tifs size: 696 MB
+# layer_name - usmallint (2^16 - 1)
+# cell_id - uinteger (2^32 - 1)
+# reason - utinyint (2^8 - 1)
+# TODO: add species ID, year, rcp, ssp
+
+# Begin a transaction to speed up bulk inserts.
+dbExecute(con, "BEGIN TRANSACTION")
+
+tic()
+for(i in 1:nrow(range_f)) {
+  # i <- 1
+  if(i == 1 | i %% 100 == 0) {
+    cat(glue('{i}..'))
+  }
+
+  row <- range_f[i,]
+  rngPF <- wd('data/scenario1/attribution_ranges/tifs',row$path)
+  
+  if(file.exists(rngPF)) {
+    rng <- rast(rngPF)
+  } else {
+    message(glue('Could not find {row$path}'))
+    next
+  }
+  
+  
+  pts <- as.data.frame(rng,xy=TRUE)
+  
+  pts$cell_id <- cellFromXY(grid,pts[,c('x','y')])
+  
+  rng_tbl <- as_tibble(pts) %>% 
+    select(cell_id,everything(),-c(x,y)) %>%
+    pivot_longer(cols=-cell_id,names_to='layer_name',values_to='reason') %>%
+    drop_na %>%
+    select(layer_name,cell_id,reason) %>%
+    #mutate(spp=row$spp,.before=1) %>%
+    arrange(layer_name,cell_id) %>%
+    mutate(across(everything(),as.integer))
+  
+  dbWriteTable(con, "attribution", rng_tbl, append = TRUE)
+  
+}
+toc()
+
+# Rollback the transaction
+dbRollback(con)
+dbExecute(con, 'rollback')
+dbGetQuery(con,'select count(*) from attribution')
+dbExecute(con,'delete from attribution')
+# Commit the transaction.
+dbExecute(con, "COMMIT")
+
+#184,188,719 rows!
+
+# (Optional) Disconnect if you are finished with insertions.
+dbDisconnect(con, shutdown = TRUE)
+```
+
+Parquet version
+
+```{r}
+
+pqdb <- 'data/attribution_ranges_pq/*.parquet'
+lyrName <- 2611
+
+# Look at the fields
+dbGetQuery(con, glue_sql("
+  SELECT *
+  FROM read_parquet({wd(pqdb)})
+  limit 5",.con=con)
+)
+
+# Slow version
+sql <- 'select cell_id, mode(reason order by reason desc) as reason
+  from read_parquet({wd(pqdb)})
+  where layer_name = {lyrName}
+  group by cell_id'
+
+tic()
+reasDat <- dbGetQuery(con, glue_sql(sql,.con=con))
+toc() #46 sec
+
+# Fast version
+sql <- "WITH reason_counts AS (
+  SELECT 
+    cell_id,
+    reason,
+    COUNT(*) AS cnt,
+    DENSE_RANK() OVER (PARTITION BY cell_id ORDER BY COUNT(*) DESC) AS cnt_rank
+  FROM read_parquet({wd(pqdb)})
+  where layer_name = {lyrName}
+  GROUP BY cell_id, reason
+),
+ranked_modes AS (
+  SELECT 
+    cell_id, 
+    reason,
+    cnt,
+    RANK() OVER (PARTITION BY cell_id, cnt_rank ORDER BY reason DESC) AS reason_rank
+  FROM reason_counts
+  WHERE cnt_rank = 1
+)
+SELECT 
+  cell_id, 
+  reason, 
+  cnt
+FROM ranked_modes
+WHERE reason_rank = 1
+ORDER BY cell_id"
+
+tic()
+reasDat <- dbGetQuery(con, glue_sql(sql,.con=con))
+toc() #2 sec!
+
+# Put it back into a raster
+
+labs <- read_csv(wd('attribution_labels.csv')) %>%
+  rename(ID=reason) %>%
+  select(ID,label)
+
+gridNA <- setValues(grid,NA)
+
+# Assign the rng values into grid based on the cell_id indices
+
+gridNA[reasDat$cell_id] <- reasDat$reason
+gridNA <- as.factor(gridNA)
+levels(gridNA) <- labs
+
+# Increase the right margin (the fourth value in mar)
+
+plot(gridNA,main=lyrName)
+
+```
+
+Query mode across cells using duckdb
+
+```{r}
+
+library(duckdb)
+library(terra)
+
+grid0 <- rast('/Users/benc/projects/gpta/data/bien_ranges/GlobalEcoregions.tif')
+
+grid <- setValues(grid0,1:ncell(grid0))
+
+.wd <- file.path(.pd,'analysis/poc/cluc/attribution_pct/random_10k')
+wd <- function(...) file.path(.wd,...)
+out <- 'data/attribution_ranges_ddb'
+
+con <- dbConnect(duckdb::duckdb(), dbdir = wd(out,"attribution_ranges.duckdb"), read_only = TRUE)
+
+#pqdb <- 'data/attribution_ranges_pq/*.parquet'
+lyrName <- 2611
+
+# Look at the fields
+dbGetQuery(con, glue_sql("
+  SELECT *
+  FROM attribution
+  limit 5",.con=con)
+)
+
+# Slow version: 3.4 seconds for layer 2611
+sql <- 'select cell_id, mode(reason order by reason desc) as reason
+  from attribution
+  where layer_name = {lyrName}
+  group by cell_id'
+
+# Slow version, all layers. 7 min for all layers
+sql <- 'select cell_id, mode(reason order by reason desc) as reason
+  from attribution
+  group by layer_name, cell_id'
+
+tic()
+reasDat <- dbGetQuery(con, glue_sql(sql,.con=con)) %>% as_tibble
+toc() 
+
+# Fast version, just one layer
+#----
+sql <- "WITH reason_counts AS (
+  SELECT layer_name, cell_id, reason, COUNT(*) AS cnt,
+    DENSE_RANK() OVER (PARTITION BY cell_id ORDER BY COUNT(*) DESC) AS cnt_rank
+  FROM attribution
+  where layer_name = {lyrName}
+  GROUP BY layer_name, cell_id, reason
+),
+ranked_modes AS (
+  SELECT layer_name, cell_id, reason, cnt,
+    RANK() OVER (PARTITION BY cell_id, cnt_rank ORDER BY reason DESC) AS reason_rank
+  FROM reason_counts
+  WHERE cnt_rank = 1
+)
+SELECT layer_name, cell_id, reason
+FROM ranked_modes
+WHERE reason_rank = 1
+ORDER BY cell_id"
+
+#Fast version, all layers. 7 sec for ~10k species
+#---- 
+sql <- "WITH reason_counts AS (
+  SELECT layer_name, cell_id, reason, COUNT(*) AS cnt,
+    RANK() OVER (PARTITION BY layer_name, cell_id ORDER BY COUNT(*) DESC) AS cnt_rank
+  FROM attribution
+  GROUP BY layer_name, cell_id, reason
+),
+ranked_modes AS (
+  SELECT layer_name,cell_id, reason, cnt,
+    RANK() OVER (PARTITION BY layer_name, cell_id, cnt_rank ORDER BY reason DESC) AS reason_rank
+  FROM reason_counts
+  WHERE cnt_rank = 1
+)
+SELECT layer_name, cell_id, reason
+FROM ranked_modes
+WHERE reason_rank = 1
+ORDER BY layer_name, cell_id"
+
+#----
+
+tic()
+reasDat <- dbGetQuery(con, glue_sql(sql,.con=con)) %>% as_tibble
+toc()
+
+#START HERE! 
+# Why 
+# Put it back into a raster
+
+labs <- read_csv(wd('attribution_labels.csv')) %>%
+  rename(ID=reason) %>%
+  select(ID,label)
+
+attRstNA <- setValues(grid,NaN)
+
+# Assign the rng values into grid based on the cell_id indices
+
+reasNest <- reasDat %>%
+  nest(data=c(cell_id,reason))
+
+x <- reasNest %>%
+  mutate(attRst=map2(layer_name,data,function(nm,dat) {
+    rst <- attRstNA
+    rst[dat$cell_id] <- dat$reason
+    rst <- as.factor(rst)
+    levels(rst) <- labs
+    names(rst) <- nm
+    return(rst)
+  }))
+
+attRst <- rast(x$attRst)
+
+attRst <- trim(attRst)
+
+plot(attRst,main=lyrName)
+
+```
+
+Try tidyterra
+
+```{r}
+library(tidyterra)
+library(sf)
+
+cat(crs(attRst))
+rastCrs <- st_crs(crs(attRst))
+
+theme_set(theme_minimal(base_size=15))
+
+p<-ggplot() +
+  geom_spatraster(data = attRst[[c("8511","8541","8571")]]) + #+, , aes(fill = tavg_04)
+  coord_sf(crs=rastCrs, datum=NA,expand=FALSE) +
+  scale_fill_viridis_d(na.translate = FALSE,
+    guide = guide_legend(title=NULL)) + #,option='inferno'
+  theme(legend.position = "bottom",
+        panel.spacing = unit(0, "cm"),
+        plot.margin = margin(0, 0, 0, 0),       # Remove outer margins
+        strip.text = element_text(margin = margin(0, 0, 0, 0))) +  # Reduce facet label margins) +
+  facet_wrap(~lyr,ncol=2)
+
+ggsave(plot=p,wd('figs/attribution_85.png'),width=17,height=11,bg="white")
+
+```
+
+Try rasterVis
+
+```{r}
+library(rasterVis)
+levelplot(gridNA, main = lyrName)
+
+```
+
+Try tmap
+
+```{r}
+library(tmap)
+library(viridis)
+
+tmap_mode("plot")  # For static maps; switch to "view" for interactive maps.
+
+tm_shape(gridNA) +
+  tm_raster(title = lyrName, palette=viridis(nrow(labs)), legend.show = TRUE) +
+  tm_layout(legend.outside=TRUE, legend.outside.position = "bottom")
+```
+
+Try tidyterra
+
+```{r}
+
+library(tidyterra)
+library(sf)
+
+cat(crs(attRst))
+rastCrs <- st_crs(crs(attRst))
+
+ggplot() +
+  geom_spatraster(data = attRst) + #+, , aes(fill = tavg_04)
+  coord_sf(crs=rastCrs, datum=NA) +
+  scale_fill_viridis_d(na.translate = FALSE,
+    guide = guide_legend(ncol = 2, title=NULL)) + #,option='inferno'
+  theme(legend.position = "bottom")
+
+  # # You can use coord_sf
+  # coord_sf(crs = 3857) +
+  # scale_fill_grass_c(palette = "celsius")
+
+```
+
+Show just gain and loss on the same plot
+
+```{r}
+
+gain_loss <- as.int(attRst > 3)
+levels(gain_loss) <- tibble(ID=0:1,label=c('loss','gain'))
+
+plot(gain_loss,main=lyrName)
+
+ggplot() +
+  geom_spatraster(data = gain_loss) + #+, , aes(fill = tavg_04)
+  coord_sf(crs=rastCrs, datum=NA) +
+  scale_fill_manual(na.translate=FALSE,
+    values = c("loss" = "#FFAA99",  # light red-orange for loss
+               "gain" = "#529B84"), # green for gain
+    guide = guide_legend(ncol = 2, title = NULL)
+  ) +
+  labs(fill = "") +  # This removes the legend title
+  # scale_fill_viridis_d(na.translate = FALSE,
+  #   guide = guide_legend(ncol = 2, title=NULL)) + #,option='inferno'
+  theme(legend.position = "bottom")
+
+```
+
+
+```{r}
+
+lossRst <- ifel(attRst <= 3, attRst, NA)
+
+levels(lossRst) <- labs %>% filter(ID <=3)
+
+ggplot() +
+  geom_spatraster(data = lossRst) + #+, , aes(fill = tavg_04)
+  coord_sf(crs=rastCrs, datum=NA) +
+  # scale_fill_manual(na.translate=FALSE,
+  #   values = c("loss" = "#FFAA99",  # light red-orange for loss
+  #              "gain" = "#529B84"), # green for gain
+  #   guide = guide_legend(ncol = 2, title = NULL)
+  # ) +
+  # labs(fill = "") +  # This removes the legend title
+  scale_fill_viridis_d(na.translate = FALSE,
+    guide = guide_legend(ncol = 2, title=NULL)) + #,option='inferno'
+  theme(legend.position = "bottom")
+
+```
+
+
+POC to Develop a four-panel, one species plot that shows the present range and then gain/loss
+Also incorporate the time series of accumulated loss.
+Maybe run this for 20 random species and write the results to a pdf file
+
+```{r}
+library(tidyterra)
+library(sf)
+
+.wd <- file.path(.pd,'analysis/poc/cluc/attribution_pct/random_10k')
+wd <- function(...) file.path(.wd,...)
+
+scenP <- 'data/scenario3'
+range_mf <- open_dataset(wd(scenP,'attribution_ranges/pq'))
+
+range_f <- range_mf %>% collect
+
+sppName <- sample(range_f$spp,1)
+
+labs <- read_csv(wd('attribution_labels.csv')) %>%
+  rename(ID=reason) %>%
+  select(ID,label)
+
+rst <- rast(wd('data/scenario3/attribution_ranges/tifs',
+               range_f %>% filter(spp==sppName) %>% pull('path')))
+
+# rst <- as.factor(rst)
+# 
+# levels(rst) <- labs
+
+# rst2 <- map(as.list(rst),~{
+#   lyrName <- names(.x)
+#   .x <- as.factor(.x)
+#   levels(.x) <- labs
+#   names(.x) <- lyrName
+#   return(.x)
+# }) %>% rast
+
+# Get the present day range
+binPresRange <- function(x) {
+  x <- x - 4
+  x <- ifel(x >=2,1,NaN)
+  names(x) <- 'present' #TODO: maybe this should be "historical" as well. 
+  return(x)
+}
+
+.rangesP <- 'data/bien_ranges/oct18_ranges/oct18_10k'
+#rangesTfs <- file.path(.rangesP,'tifs')
+#.rangesP <- file.path(.wd,'data/random_50')
+manf <- open_dataset(pd(.rangesP,'manifest'))
+
+presRngPF <- manf %>% 
+  filter(spp==sppName & scenario=='present') %>% collect %>% pull('path') %>%
+  pd(.rangesP,'tifs',.)
+        
+pres <- binPresRange(rast(presRngPF))
+
+# scenRst <- rst2[[c("2611", "2641", "2671")]]
+# 
+pres2 <- ifel(pres==1,0,pres)
+# 
+# pres <- crop(pres,ext(scenRst))
+# 
+# rst3 <- c(pres,scenRst)
+# 
+# plot(scenRst[[1]])
+
+# This works
+rst4 <- cover(rst[[2]],pres2)
+
+rst4 <- as.factor(rst4)
+
+labsPres <- tibble(ID=0,label='(0) Present range') %>% bind_rows(labs)
+levels(rst4) <- labsPres
+
+library(viridis)
+
+mapCols <- c('lightgrey',viridis(10))
+custom_colors <- setNames(mapCols,labsPres$label)
+#custom_colors <- c("0" = "lightgrey", setNames(viridis(10), as.character(1:10)))
+
+ggplot() +
+  geom_spatraster(data = rst4) + #+, , aes(fill = tavg_04)
+  coord_sf(crs=st_crs(crs(rst)), datum=NA,expand=FALSE) +
+  # scale_fill_viridis_d(na.translate = FALSE,
+  #   guide = guide_legend(title=NULL)) + #,option='inferno'
+  scale_fill_manual(values = custom_colors, na.translate = FALSE,
+                    guide = guide_legend(title = NULL,ncol=2)) +
+  theme(legend.position = "bottom")
+
+```
+
+Generalize and clean up the above approach, apply to multiple layers.
+
+```{r}
+library(tidyterra)
+library(sf)
+
+scenP <- 'data/scenario3'
+range_mf <- open_dataset(wd(scenP,'attribution_ranges/pq'))
+
+range_f <- range_mf %>% collect
+
+sppName <- sample(range_f$spp,1)
+
+labs <- read_csv(wd('attribution_labels.csv')) %>%
+  rename(ID=reason) %>%
+  select(ID,label)
+
+#Not helpful. Maybe I should add layer names, years to layer_map.csv like below
+#layerMap <- read_csv(wd('layer_map.csv'))
+
+layerYears <- tibble(layer_names=c(2611,2641,2671,7011,7041,7071,8511,8541,8571),
+       year=rep(c(2030,2050,2100),3))
+
+labsPres <- tibble(ID=0,label='(0) Present range') %>% bind_rows(labs)
+
+rst <- rast(wd('data/scenario3/attribution_ranges/tifs',
+               range_f %>% filter(spp==sppName) %>% pull('path')))
+
+# rst <- as.factor(rst)
+# 
+# levels(rst) <- labs
+
+rst2 <- map(as.list(rst),~{
+  lyrName <- names(.x)
+  .x <- as.factor(.x)
+  levels(.x) <- labs
+  names(.x) <- lyrName
+  return(.x)
+}) %>% rast
+
+# Get the present day range
+binPresRange <- function(x) {
+  x <- x - 4
+  x <- ifel(x >=2,1,NaN)
+  names(x) <- 'present' #TODO: maybe this should be "historical" as well. 
+  return(x)
+}
+
+.rangesP <- 'data/bien_ranges/oct18_ranges/oct18_10k'
+#rangesTfs <- file.path(.rangesP,'tifs')
+#.rangesP <- file.path(.wd,'data/random_50')
+manf <- open_dataset(pd(.rangesP,'manifest'))
+
+presRngPF <- manf %>% 
+  filter(spp==sppName & scenario=='present') %>% collect %>% pull('path') %>%
+  pd(.rangesP,'tifs',.)
+        
+pres <- binPresRange(rast(presRngPF))
+
+
+scenRst <- rst[[c("2611", "2641", "2671")]]
+
+# Set names, seems convoluted since I ned to set according to order
+lyr2 <- layerYears %>% filter(layer_names %in% names(scenRst))
+scenRst <- scenRst[[as.character(lyr2$layer_names)]]
+names(scenRst) <- lyr2$year
+
+pres <- crop(pres,ext(scenRst))
+
+pres2 <- ifel(pres==1,0,pres)
+
+scenRst2 <- rast(map(as.list(scenRst),cover,pres2))
+
+
+presFut <- map(as.list(c(pres2,scenRst2)),~{
+  lyrName <- names(.x)
+  .x <- as.factor(.x)
+  levels(.x) <- labsPres
+  names(.x) <- lyrName
+  return(.x)
+}) %>% rast
+
+library(viridis)
+
+mapCols <- c('lightgrey',viridis(10))
+custom_colors <- setNames(mapCols,labsPres$label)
+#custom_colors <- c("0" = "lightgrey", setNames(viridis(10), as.character(1:10)))
+
+ggplot() +
+  geom_spatraster(data = presFut) + #+, , aes(fill = tavg_04)
+  coord_sf(crs=st_crs(crs(presFut)), datum=NA,expand=FALSE) +
+  # scale_fill_viridis_d(na.translate = FALSE,
+  #   guide = guide_legend(title=NULL)) + #,option='inferno'
+  scale_fill_manual(values = custom_colors, na.translate = FALSE,
+                    guide = guide_legend(title = NULL,ncol=2)) +
+  theme(legend.position = "bottom") +
+  ggtitle(glue('{sppName}; scenario: 8.5')) +
+  facet_wrap(~lyr,ncol=2)
+
+ggsave(wd('figs/single_26.png'),width=17,height=11,bg="white")
+
+```
+
+```{r}
+plot(pres)
+```
+
+
+```{r}
+ggplot() +
+  geom_spatraster(data = rst2) + #+, , aes(fill = tavg_04)
+  coord_sf(crs=st_crs(crs(rst)), datum=NA,expand=FALSE) +
+  scale_fill_viridis_d(na.translate = FALSE,
+    guide = guide_legend(title=NULL)) + #,option='inferno'
+  theme(legend.position = "bottom") +  # Reduce facet label margins) +
+  facet_wrap(~lyr)
+```
+
+
+```{r}
+areaPF <- 'data/scenario3/pq'
+area0 <- open_dataset(wd(areaPF))
+
+area0 %>% head %>% collect
+
+theme_set(theme_minimal(base_size=15))
+
+p<-ggplot() +
+  geom_spatraster(data = attRst[[c("8511","8541","8571")]]) + #+, , aes(fill = tavg_04)
+  coord_sf(crs=rastCrs, datum=NA,expand=FALSE) +
+  scale_fill_viridis_d(na.translate = FALSE,
+    guide = guide_legend(title=NULL)) + #,option='inferno'
+  theme(legend.position = "bottom",
+        panel.spacing = unit(0, "cm"),
+        plot.margin = margin(0, 0, 0, 0),       # Remove outer margins
+        strip.text = element_text(margin = margin(0, 0, 0, 0))) +  # Reduce facet label margins) +
+  facet_wrap(~lyr,ncol=2)
+
+ggsave(plot=p,wd('figs/attribution_85.png'),width=17,height=11,bg="white")
+
+```
+
+Make a plot showing, for one species, the total loss of area, accumulated over time
+Change in area for that timestep should be sum(gain) + sum(loss)
+
+```{r}
+
+wd0 <- function(wdx) {
+  if (missing(wdx)) stop("'.wd' must be provided")
+  function(...) file.path(wdx, ...)
+}
+
+wd <- wd0(pd('analysis/poc/cluc/attribution_pct/random_10k'))
+
+areaPF <- 'data/scenario3/pq'
+area0 <- open_dataset(wd(areaPF))
+
+area0 %>% head %>% collect
+
+area0 %>%
+  group_by(spp,layer_name,dispersal,full_domain) %>%
+  summarize(area_km2=sum(area_km2)) %>%
+  arrange(area_km2) %>%
+  head %>% collect
+
+#Acroceras zizanioides - This has the highest total loss in the dataset, which occurs in 8571
+
+labs <- read_csv(wd('attribution_labels.csv'))
+
+sppName <- 'Acroceras zizanioides' 
+
+sppArea <- area0 %>%
+  filter(spp==sppName) %>%
+  collect %>%
+  mutate(main_effect=ifelse(reason <= 3,'loss','gain')) %>%
+  separate_wider_position(cols=layer_name,widths=c(rcp=2,year=2),cols_remove=FALSE) %>%
+  mutate(year=2000 + as.integer(year), reason=factor(reason,levels=labs$reason,labels=labs$label))
+```
+
+Area km2 not accumulated over time
+
+```{r}
+sppArea %>%
+  filter(main_effect=='loss') %>% 
+ggplot(aes(x=year,y=area_km2,group=reason,color=reason)) +
+  geom_line() +
+  scale_y_continuous(labels = scales::comma) +
+  theme(legend.position = "bottom",legend.title=element_blank()) +
+  guides(color = guide_legend(ncol = 1)) +
+  facet_wrap(vars(rcp),scales='free_y')
+
+```
+
+Area km2 - accumulated over time - different scales
+
+```{r}
+
+sppArea %>%
+  mutate(area_km2=cumsum(area_km2),.by=c(rcp,reason)) %>%
+  filter(main_effect=='loss') %>% 
+ggplot(aes(x=year,y=area_km2,group=reason,color=reason)) +
+  geom_line() +
+  scale_y_continuous(labels = scales::comma) +
+  theme(legend.position = "bottom",legend.title=element_blank()) +
+  guides(color = guide_legend(ncol = 1)) +
+  facet_wrap(vars(rcp),scales='free_y')
+```
+Area km2 - accumulated over time - same scales
+
+```{r}
+
+sppArea %>%
+  mutate(area_km2=cumsum(area_km2),.by=c(rcp,reason)) %>%
+  filter(main_effect=='loss') %>% 
+ggplot(aes(x=year,y=area_km2,group=reason,color=reason)) +
+  geom_line() +
+  scale_y_continuous(labels = scales::comma) +
+  theme(legend.position = "bottom",legend.title=element_blank()) +
+  guides(color = guide_legend(ncol = 1)) +
+  facet_wrap(vars(rcp))
+
+```
+Gain - Area km2 - accumulated over time - same scales
+
+```{r}
+
+sppArea %>%
+  mutate(area_km2=cumsum(area_km2),.by=c(rcp,reason)) %>%
+  filter(main_effect=='gain') %>% 
+ggplot(aes(x=year,y=area_km2,group=reason,color=reason)) +
+  geom_line() +
+  scale_y_continuous(labels = scales::comma) +
+  theme(legend.position = "bottom",legend.title=element_blank()) +
+  guides(color = guide_legend(ncol = 2)) +
+  facet_wrap(vars(rcp))
+
+```
+Everything - Area km2 - accumulated over time - same scales
+
+```{r}
+
+sppArea %>%
+  mutate(area_km2=cumsum(area_km2),.by=c(rcp,reason)) %>%
+ggplot(aes(x=year,y=area_km2,group=reason,color=reason)) +
+  geom_line() +
+  scale_y_continuous(labels = scales::comma) +
+  theme(legend.position = "bottom",legend.title=element_blank()) +
+  guides(color = guide_legend(ncol = 2)) +
+  facet_wrap(vars(rcp))
+
+```
+
+Calculate median area summary
+
+```{r}
+labs <- read_csv(wd('attribution_labels.csv'))
+areaPF <- 'data/scenario3/pq'
+area0 <- open_dataset(wd(areaPF))
+
+medianArea <- area0 %>%
+  group_by(layer_name,reason) %>%
+  summarize(area_km2=median(area_km2)) %>%
+  ungroup %>%
+  collect %>%
+  mutate(main_effect=ifelse(reason <= 3,'loss','gain')) %>%
+  separate_wider_position(cols=layer_name,widths=c(rcp=2,year=2),cols_remove=FALSE) %>%
+  mutate(year=2000 + as.integer(year), reason=factor(reason,levels=labs$reason,labels=labs$label))
+```
+
+Everything - Loss
+
+```{r}
+
+medianArea %>%
+  mutate(area_km2=cumsum(area_km2),.by=c(rcp,reason)) %>%
+  filter(main_effect=='loss') %>%
+ggplot(aes(x=year,y=area_km2,group=reason,color=reason)) +
+  geom_line() +
+  scale_y_continuous(labels = scales::comma) +
+  theme(legend.position = "bottom",legend.title=element_blank()) +
+  guides(color = guide_legend(ncol = 1)) +
+  facet_wrap(vars(rcp))
+```
+
+Everything - Gain
+
+```{r}
+gainReason <- medianArea %>%
+  filter(main_effect=='gain') %>%
+  arrange(rcp,reason,year) %>% # !! Important to sort by year for cumsum to work!
+  mutate(area_km2=cumsum(area_km2),.by=c(rcp,reason)) %>%
+  select(rcp,reason,year,area_km2)
+
+# Compute total line: sum all reasons per rcp and year, then calculate the cumulative sum
+gainTotal <- medianArea %>%
+  filter(main_effect == "gain") %>%
+  summarise(area_km2 = sum(area_km2), .by=c(rcp,year)) %>%
+  arrange(rcp, year) %>%  # sort by year within each rcp for cumulative sum
+  mutate(reason = "Total", area_km2 = cumsum(area_km2), .by=rcp) %>%
+  select(rcp, reason, year, area_km2)
+
+gainReason %>%
+  bind_rows(gainTotal) %>%
+ggplot(aes(x=year,y=area_km2,group=reason,color=reason)) +
+  geom_line() +
+  scale_y_continuous(labels = scales::comma) +
+  theme(legend.position = "bottom",legend.title=element_blank()) +
+  guides(color = guide_legend(ncol = 2)) +
+  facet_wrap(vars(rcp))
+```
+
+This is called a "Stacked area chart"
+
+```{r}
+# Aggregate the raw yearly values per rcp and reason
+gainReason <- medianArea %>%
+  filter(main_effect=='gain') %>%
+  arrange(rcp,reason,year) %>% # !! Important to sort by year for cumsum to work!
+  mutate(area_km2=cumsum(area_km2),.by=c(rcp,reason)) %>%
+  select(rcp,reason,year,area_km2)
+
+# Create the stacked area chart
+ggplot(gainReason, aes(x = year, y = area_km2, fill = reason)) +
+  geom_area() +
+  facet_wrap(~ rcp) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(x=NULL) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank()
+  ) +
+  guides(fill = guide_legend(ncol = 2))
+```
+
+
+Same but for loss
+
+```{r}
+# Aggregate the raw yearly values per rcp and reason
+gainReason <- medianArea %>%
+  filter(main_effect=='loss') %>%
+  arrange(rcp,reason,year) %>% # !! Important to sort by year for cumsum to work!
+  mutate(area_km2=cumsum(area_km2),.by=c(rcp,reason)) %>%
+  select(rcp,reason,year,area_km2)
+
+# Create the stacked area chart
+ggplot(gainReason, aes(x = year, y = area_km2, fill = reason)) +
+  geom_area() +
+  facet_wrap(~ rcp) +
+  scale_y_continuous(labels = scales::comma) +
+  labs(x=NULL) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_blank()
+  ) +
+  guides(fill = guide_legend(ncol = 2))
+```
+
+Everything
+
+```{r}
+medianArea %>%
+  arrange(rcp,reason,year) %>%
+  mutate(area_km2=cumsum(area_km2),.by=c(rcp,reason)) %>%
+ggplot(aes(x=year,y=area_km2,group=reason,color=reason)) +
+  geom_line() +
+  scale_y_continuous(labels = scales::comma) +
+  theme(legend.position = "bottom",legend.title=element_blank()) +
+  guides(color = guide_legend(ncol = 2)) +
+  facet_wrap(vars(rcp))
+```
+
+# ====== OLD ========= #
+
+```{r}
+library(DBI)
+library(duckdb)
+
+# Create an in-memory database connection
+con <- dbConnect(duckdb())
+
+# Create a temporary table with sample data
+dbExecute(con, "
+CREATE TEMPORARY TABLE sample_data AS (
+    SELECT * FROM (VALUES
+        ('A', 'reason1'),
+        ('A', 'reason1'),
+        ('A', 'reason1'),
+        ('A', 'reason2'),
+        ('A', 'reason2'),
+        ('A', 'reason3'),
+        
+        ('B', 'reason1'),
+        ('B', 'reason1'),
+        ('B', 'reason2'),
+        ('B', 'reason2'),
+        ('B', 'reason3'),
+        
+        ('C', 'reason1'),
+        ('C', 'reason2'),
+        ('C', 'reason3')
+    ) AS t(cell_id, reason)
+)");
+
+# Show the raw data
+raw_data <- dbGetQuery(con, "SELECT * FROM sample_data")
+print("Raw Data:")
+print(raw_data)
+
+# Demonstrate the mode calculation with ranking
+mode_calculation <- dbGetQuery(con, "
+WITH reason_counts AS (
+  SELECT 
+    cell_id,
+    reason,
+    COUNT(*) AS cnt,
+    RANK() OVER (PARTITION BY cell_id ORDER BY COUNT(*) DESC) AS rnk
+  FROM sample_data
+  GROUP BY cell_id, reason
+)
+SELECT 
+  cell_id, 
+  reason AS mode_reason, 
+  cnt AS mode_count,
+  rnk
+FROM reason_counts
+ORDER BY cell_id, rnk
+")
+print("Mode Calculation (with ranks):")
+print(mode_calculation)
+
+# Mode selection with tie-breaking by highest reason
+mode_result <- dbGetQuery(con, "
+WITH reason_counts AS (
+  SELECT 
+    cell_id,
+    reason,
+    COUNT(*) AS cnt,
+    DENSE_RANK() OVER (PARTITION BY cell_id ORDER BY COUNT(*) DESC) AS cnt_rank
+  FROM sample_data
+  GROUP BY cell_id, reason
+),
+ranked_modes AS (
+  SELECT 
+    cell_id, 
+    reason AS mode_reason, 
+    cnt AS mode_count,
+    RANK() OVER (PARTITION BY cell_id, cnt_rank ORDER BY reason DESC) AS reason_rank
+  FROM reason_counts
+  WHERE cnt_rank = 1
+)
+SELECT 
+  cell_id, 
+  mode_reason, 
+  mode_count
+FROM ranked_modes
+WHERE reason_rank = 1
+ORDER BY cell_id
+")
+print("Final Mode Result (with tie-breaking):")
+print(mode_result)
+
+# Close the connection
+dbDisconnect(con)
+```
+
+#### `r strftime(Sys.time(),format='%Y-%m-%d')`
+
+```{r finalize}
+
+#---- Warnings ----
+warns <- warnings()
+
+if(length(warns) > 0) { cat('\n'); summary(warns); cat('\n') }
+
+#---- Git Repo ----
+repo <- git2r::repository(pd('src'))
+gitSha <- git2r::sha(git2r::repository_head(repo)) %>% substr(1,7)
+
+rmt <- git2r::remotes(repo)
+
+if(length(rmt)) {
+  #TODO: need to parse rmt when I have a repo that has a remote
+  shaTxt <- glue('[{gitSha}](https://github.com/{rmt}/tree/{gitSha})')
+} else {
+  shaTxt <- gitSha
+}
+
+```
+
+Commit when this report was run: `r shaTxt`
+
+`r strftime(Sys.time(),format='%Y-%m-%d %H:%M')`. `r Sys.timezone()`
+
+`r capture.output(toc())`

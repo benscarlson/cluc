@@ -1,0 +1,1 @@
+Downloaded from: https://github.com/cmerow/BIENWorkflow/blob/master/inst/extdata/GlobalEcoregions.tif

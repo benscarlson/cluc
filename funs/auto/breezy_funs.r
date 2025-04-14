@@ -57,6 +57,12 @@ hre <- function(tStart, tEnd=Sys.time()) {
   return(output)
 }
 
-pd <- function(...) file.path(.pd,...)
-wd <- function(...) file.path(.wd,...)
+# pd <- function(...) file.path(.pd,...)
+# wd <- function(...) file.path(.wd,...)
+
+pathFactory <- function(path) {
+  if (missing(path)) stop("'path' must be provided")
+  function(...) file.path(path, ...)
+}
+
 
