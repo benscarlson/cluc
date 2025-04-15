@@ -126,40 +126,50 @@ sbatch $pars $exp $src/poc/cluc/cluc_hpc_slurm.sh
 #---
 
 # Project variables
-export proj=cluc
-export pd=~/projects/$proj
-export ses=main
-export wd=$pd/analysis/$ses
-export src=$pd/src
+proj=cluc
+pd=~/projects/$proj
+ses=main
+wd=$pd/analysis/$ses
+
+src=$pd/src
 
 cd $wd
 
 # Slurm variables
 #n=300 is the most you can request with 12G mem-per-cpu, so max 3600GB mem?
 #started before 12:00
-export n=3 #
-export mpc=10G # #SBATCH --mem-per-cpu=20G
+n=3 #
+mpc=15G # #SBATCH --mem-per-cpu=20G
 #export mem=30G
-export p=debug
-export mail=NONE
-export t=10
+p=debug
+mail=NONE
+t=10
 
-pars="--ntasks $n -p $p --time $t --mail-type $mail --mem-per-cpu $mpc" #  --mem $mem
-exp="--export=ALL,n=$n,p=$p,mail=$mail,t=$t,mpc=$mpc" # mem=$mem
+# Make settings that will apply to all script runs in $wd
+# TODO: use scratch drive
+cat <<EOF > $wd/cluc_hpc_settings.yml
+terraOptions:
+  memmax: 6
+  memfrac: 0.2
+EOF
 
 # Script parameters
 ranges=/shared/mcu08001/bien_ranges/BIEN_Ranges_Apr11_2025/extracted
 out=$wd/data/scenario3
 
-export scriptPars="$ranges $out --dispersal --fulldomain -k 3 -p mpi -n 6"
+slurmPars="--ntasks $n -p $p --time $t --mail-type $mail --mem-per-cpu $mpc" #  --mem $mem
+scriptPars="$ranges $out --dispersal --fulldomain -k 3 -p mpi -n 6"
 
+export n src scriptPars
 #The script only uses n, src, scriptPars
-sbatch $pars $exp $src/main/cluc_hpc_slurm.sh
+sbatch $slurmPars --export=ALL $src/main/cluc_hpc_slurm.sh
 
 #--- Check results
 squeue -u bsc23001
-tail *.log
-cat $wd/mpilogs/*.log
+cat cluc_hpc_slurm.log
+tail cluc_hpc_slurm.log
+tail $out/mpilogs/MPI_1_*.log
+tail $out/mpilogs/*
 
 # commented b/c it was ruining syntax highlighting
 duckdb -csv <<SQL
@@ -167,8 +177,7 @@ duckdb -csv <<SQL
 SQL
 
 #Clean up
-rm cluc_hpc_slurm.log
-rm -r $wd/mpilogs
+rm $wd/cluc_hpc_slurm.log
 rm -r $out
 
 
