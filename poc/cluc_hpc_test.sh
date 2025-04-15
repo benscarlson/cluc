@@ -140,7 +140,7 @@ cd $wd
 #started before 12:00
 n=3 #
 mpc=15G # #SBATCH --mem-per-cpu=20G
-#export mem=30G
+#mem=30G
 p=debug
 mail=NONE
 t=10
@@ -157,17 +157,19 @@ EOF
 ranges=/shared/mcu08001/bien_ranges/BIEN_Ranges_Apr11_2025/extracted
 out=$wd/data/scenario3
 
-slurmPars="--ntasks $n -p $p --time $t --mail-type $mail --mem-per-cpu $mpc" #  --mem $mem
+slurmPars="--ntasks $n -p $p --time $t --mail-type $mail --mem-per-cpu $mpc \
+  --output=$out/cluc_hpc_slurm.log --error=$out/cluc_hpc_slurm.log" #  --mem $mem
+
 scriptPars="$ranges $out --dispersal --fulldomain -k 3 -p mpi -n 6"
 
-export n src scriptPars
-#The script only uses n, src, scriptPars
+export src scriptPars #The slurm script needs access to src and scriptPars
+
 sbatch $slurmPars --export=ALL $src/main/cluc_hpc_slurm.sh
 
 #--- Check results
 squeue -u bsc23001
-cat cluc_hpc_slurm.log
-tail cluc_hpc_slurm.log
+cat $out/cluc_hpc_slurm.log
+tail $out/cluc_hpc_slurm.log
 tail $out/mpilogs/MPI_1_*.log
 tail $out/mpilogs/*
 
@@ -177,7 +179,6 @@ duckdb -csv <<SQL
 SQL
 
 #Clean up
-rm $wd/cluc_hpc_slurm.log
 rm -r $out
 
 
