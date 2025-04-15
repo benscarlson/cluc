@@ -28,7 +28,7 @@ Options:
 -d --dispersal  Whether dispersal is allowed
 -f --fulldomain  Use full domain or ecoregion constrained ranges
 -l --maxCell=<maxcell>  Do not process a range with more than <maxcell> cells. Useful for low-memory cores. Defaults to Inf.
--m --mpilogs=<mpilogs> Directory for the mpi log files
+-m --mpilogs=<mpilogs> Directory for the mpi log files. Defaults to <out>/mpilogs
 -n --numrows=<numrows>  Process the first n rows. Useful for testing.
 -p --parMethod=<parMethod>  Either <mpi | mc>. If not passed in, script will run sequentially.
 -s --resume   Run species in the species control file that are not in spp_complete.csv.
@@ -93,7 +93,7 @@ if(interactive()) {
   .dispersal <- ag$dispersal
   .fullDomain <- ag$fulldomain
   .maxCell <- parseParam(ag$maxcell,Inf)
-  .mpiLogP <- makePath(ag$mpilogs,'mpilogs')
+  .mpiLogP <- makePath(ag$mpilogs,file.path(.outP,'mpilogs'))
   .numRows <- parseParam(ag$numrows,Inf) #Used to read the first n rows in read_csv
   .parMethod <- ag$parMethod
   .resume <- ag$resume
