@@ -31,6 +31,7 @@ out=$wd/data/scenario3
 export R_LIBS=~/rlibs
 $src/main/cluc_hpc.r $ranges $out --dispersal --fulldomain -k 3 -n 6 -b
 
+rm -r $out
 
 #---- Interactive in parallel
 
@@ -39,37 +40,42 @@ srun -n 3 --mem 30GB -p debug --pty bash
 module unload gcc
 module load gdal/3.8.4 cuda/11.6 r/4.4.0
 
-proj=gpta
+proj=cluc
 pd=~/projects/$proj
-ses=cluc/attribution_pct/random_10k
-wd=$pd/analysis/poc/$ses
+ses=main
+wd=$pd/analysis/$ses
 src=$pd/src
 #R_LIBS=~/rlibs
 
 cd $wd
 
-ranges=~/projects/bien_ranges/data/BIEN_Ranges_Oct18_2024
+ranges=/shared/mcu08001/bien_ranges/BIEN_Ranges_Apr11_2025/extracted
 out=$wd/data/scenario3
 
 # Use shebag in script and pass in R_LIBS directly to mpirun instead of exporting
-mpirun -n 3 -x R_LIBS=~/rlibs $src/poc/cluc/cluc_hpc.r $ranges $out \
+mpirun -n 3 -x R_LIBS=~/rlibs $src/main/cluc_hpc.r $ranges $out \
   --dispersal --fulldomain  -k 3 -p mpi -n 6 --verbose
 
 /scratch/mcu08001/bsc23001/tmp
 
-cat data/scenario3/spp_errors.csv
-cat mpilogs/MPI_1_*
-tail mpilogs/MPI_1_*
-cat mpilogs/*
+#---- Spot check all results
+mlr --icsv --opprint cat $out/spp_errors.csv
+mlr --icsv --opprint cat $out/script_status.csv
+mlr --icsv --opprint cat $out/task_status.csv
 
-# Commented because it was runing syntax highlighting.
-duckdb -csv <<SQL
-  select * from read_parquet('$out/pq/*.parquet') limit 10
-SQL
+cat $out/mpilogs/MPI_1_*
+tail $out/mpilogs/MPI_1_*
+cat $out/mpilogs/*
+
+duckdb -csv -c "select * from read_parquet('$out/pq/*.parquet') limit 10"
+
+mlr --icsv cat $out/spp_complete.csv | wc -l
+ls -1 $out/attribution_ranges/tifs | wc -l
 
 #-- Clean up
 rm -r $out
-rm -r mpilogs
+
+#!!!! START HERE !!!!
 
 #----
 #---- SLURM script, debug run
@@ -115,9 +121,44 @@ export scriptPars="$ranges $out --dispersal --fulldomain -k 3 -p mpi -n 6"
 
 sbatch $pars $exp $src/poc/cluc/cluc_hpc_slurm.sh
 
+#---
+#--- Try a streamlined approach
+#---
+
+# Project variables
+export proj=cluc
+export pd=~/projects/$proj
+export ses=main
+export wd=$pd/analysis/$ses
+export src=$pd/src
+
+cd $wd
+
+# Slurm variables
+#n=300 is the most you can request with 12G mem-per-cpu, so max 3600GB mem?
+#started before 12:00
+export n=3 #
+export mpc=10G # #SBATCH --mem-per-cpu=20G
+#export mem=30G
+export p=debug
+export mail=NONE
+export t=10
+
+pars="--ntasks $n -p $p --time $t --mail-type $mail --mem-per-cpu $mpc" #  --mem $mem
+exp="--export=ALL,n=$n,p=$p,mail=$mail,t=$t,mpc=$mpc" # mem=$mem
+
+# Script parameters
+ranges=/shared/mcu08001/bien_ranges/BIEN_Ranges_Apr11_2025/extracted
+out=$wd/data/scenario3
+
+export scriptPars="$ranges $out --dispersal --fulldomain -k 3 -p mpi -n 6"
+
+#The script only uses n, src, scriptPars
+sbatch $pars $exp $src/main/cluc_hpc_slurm.sh
+
 #--- Check results
 squeue -u bsc23001
-cat *.log
+tail *.log
 cat $wd/mpilogs/*.log
 
 # commented b/c it was ruining syntax highlighting
