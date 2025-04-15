@@ -56,7 +56,7 @@ out=$wd/data/scenario3
 mpirun -n 3 -x R_LIBS=~/rlibs $src/main/cluc_hpc.r $ranges $out \
   --dispersal --fulldomain  -k 3 -p mpi -n 6 --verbose
 
-/scratch/mcu08001/bsc23001/tmp
+
 
 #---- Spot check all results
 mlr --icsv --opprint cat $out/spp_errors.csv
@@ -75,69 +75,21 @@ ls -1 $out/attribution_ranges/tifs | wc -l
 #-- Clean up
 rm -r $out
 
-#!!!! START HERE !!!!
-
 #----
 #---- SLURM script, debug run
 #----
-
-ssh storrs
-
-# Project variables
-export proj=gpta
-export pd=~/projects/$proj
-export ses=cluc/attribution_pct/random_10k
-export wd=$pd/analysis/poc/$ses
-export src=$pd/src
-
-cd $wd
-
-# Slurm variables
-#n=300 is the most you can request with 12G mem-per-cpu, so max 3600GB mem?
-#started before 12:00
-export n=3 #
-#export mpc=12G # #SBATCH --mem-per-cpu=20G
-export mem=30G
-export p=debug
-export mail=NONE
-export t=10
-
-# These have to start with the --option b/c echo won't print - as first character
-#Note that 'pars' has the names of the parameters e.g "--mem-per-cpu $mpc"
-# while 'exp' is the variable name. e.g. mpc=$mpc
-#TODO: check again to see if this is all necessary!
-#also, I dont' need $(). Just use "", see below
-# pars=$(echo --ntasks $n -p $p --time $t --mail-type $mail --mem $mem) # --mem-per-cpu $mpc
-# exp=$(echo --export=ALL,n=$n,p=$p,mail=$mail,t=$t,mem=$mem) #mpc=$mpc
-
-pars="--ntasks $n -p $p --time $t --mail-type $mail --mem $mem" # --mem-per-cpu $mpc
-exp="--export=ALL,n=$n,p=$p,mail=$mail,t=$t,mem=$mem" #mpc=$mpc
-
-# Script parameters
-ranges=~/projects/bien_ranges/data/BIEN_Ranges_Oct18_2024
-out=$wd/data/scenario3
-
-export scriptPars="$ranges $out --dispersal --fulldomain -k 3 -p mpi -n 6"
-
-sbatch $pars $exp $src/poc/cluc/cluc_hpc_slurm.sh
-
-#---
-#--- Try a streamlined approach
-#---
 
 # Project variables
 proj=cluc
 pd=~/projects/$proj
 ses=main
 wd=$pd/analysis/$ses
-
 src=$pd/src
 
 cd $wd
 
 # Slurm variables
 #n=300 is the most you can request with 12G mem-per-cpu, so max 3600GB mem?
-#started before 12:00
 n=3 #
 mpc=15G # #SBATCH --mem-per-cpu=20G
 #mem=30G
@@ -157,10 +109,11 @@ EOF
 ranges=/shared/mcu08001/bien_ranges/BIEN_Ranges_Apr11_2025/extracted
 out=$wd/data/scenario3
 
+scriptPars="$ranges $out --dispersal --fulldomain -k 3 -p mpi -n 6"
+
+# Sbatch parameters
 slurmPars="--ntasks $n -p $p --time $t --mail-type $mail --mem-per-cpu $mpc \
   --output=$out/cluc_hpc_slurm.log --error=$out/cluc_hpc_slurm.log" #  --mem $mem
-
-scriptPars="$ranges $out --dispersal --fulldomain -k 3 -p mpi -n 6"
 
 export src scriptPars #The slurm script needs access to src and scriptPars
 
@@ -178,13 +131,16 @@ duckdb -csv <<SQL
   select * from read_parquet('$out/pq/*.parquet') limit 10
 SQL
 
-#Clean up
+#--- Clean up
 rm -r $out
 
 
 #How long did a job sit before it was started?
 sacct -j 8872803 --format=Elapsed
 sacct -j 8872803 --format=Submit,Start
+
+#!!!! START HERE !!!
+# The full run should be in main, delete below
 
 #----
 #---- SLURM script, full run

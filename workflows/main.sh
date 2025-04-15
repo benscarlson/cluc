@@ -101,6 +101,73 @@ SQL
 
 cat $wd/ctfs/species.csv | wc -l #78,905
 
+#----
+#---- Run on the hpc
+#----
+
+# Project variables
+proj=cluc
+pd=~/projects/$proj
+ses=main
+wd=$pd/analysis/$ses
+src=$pd/src
+
+cd $wd
+
+# Slurm variables
+#n=300 is the most you can request with 12G mem-per-cpu, so max 3600GB mem?
+# 400, 8G, 2 hours -- did not start after ~5 to 10 min
+# 250, 8G, 2 hours -- started immediately. 250 may be the new maximum.
+# 250, 10G, 2 hours -- started immediately.
+# 250, 12G, 2 hours -- started immediately.
+n=250 #
+mpc=12G # #SBATCH --mem-per-cpu=20G
+#mem=30G
+p=general
+mail=NONE
+t=2:00:00
+
+#Set up the scratch directory for temporary terra files
+mkdir -p /scratch/mcu08001/bsc23001/tmp
+
+# Make settings that will apply to all script runs in $wd
+# max: 6, frac: 0.3 died with 8G
+# max: 5, frac: 0.2 died with 8G
+# max: 5, frac: 0.2 died with 10G
+cat <<EOF > $wd/cluc_hpc_settings.yml
+terraOptions:
+  memmax: 5
+  memfrac: 0.1
+  tempdir: /scratch/mcu08001/bsc23001/tmp
+EOF
+
+# Script parameters
+ranges=/shared/mcu08001/bien_ranges/BIEN_Ranges_Apr11_2025/extracted
+out=$wd/data/scenario3
+#mkdir -p $out #Test this again, not sure if true: Need to create so that log files can be written here by slurm
+
+scriptPars="$ranges $out --dispersal --fulldomain -k 10 -p mpi --verbose"
+
+# Sbatch parameters
+slurmPars="--ntasks $n -p $p --time $t --mail-type $mail --mem-per-cpu $mpc \
+  --output=$out/cluc_hpc_slurm.log --error=$out/cluc_hpc_slurm.log" #  --mem $mem
+
+export src scriptPars #The slurm script needs access to src and scriptPars
+
+sbatch $slurmPars --export=ALL $src/main/cluc_hpc_slurm.sh
+
+#---
+#--- Check process and results
+#---
+
+#--- Clean up
+rm -r $out
+
+# See cluc_hpc_check.sh for commands to examine the running process and results
+
+#!!!! OLD CODE BELOW HERE !!!!!
+
+
 # To test with smaller subsets
 # see src/poc/cluc_hpc_test.sh
 

@@ -7,7 +7,8 @@
 # Maybe pass in a value to "resume" instead of true/false?
 #TODO: save a file of input parameters
 #TODO: make a file that installs all required packages
-
+#TODO: suppress messages for rmpi
+#TODO: put i of n for species within a task
 '
 Usage:
 cluc_hpc.r <ranges> <out> [--chunksize=<chunksize>] [--cores=<cores>] [--dispersal] [--fulldomain] [--maxcell=<maxcell>] [--mpilogs=<mpilogs>] [--numrows=<numrows>] [--parMethod=<parMethod>] [--resume] [--verbose]
@@ -704,7 +705,7 @@ foreach(i=icount(nrow(rowGroups))) %mypar% {
     rm(resDat,errDat,envsR, eco); 
     
     gcLogMem(spp=NA)
-    tmpFiles(remove=TRUE) #Clean up terra temporary files
+    #tmpFiles(remove=TRUE) #Clean up terra temporary files
     
     return(TRUE) #Return true to keep return vector small
 
