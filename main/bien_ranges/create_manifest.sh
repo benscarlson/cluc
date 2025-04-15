@@ -100,7 +100,7 @@ time for rngZip in "${rngZips[@]}"; do
   
   # Process the zip file and create a manifest
   # head -10 |
-  zipinfo -1 "$zipsP/$rngZip" | head -10 | grep '.tif$' | head -10 |\
+  zipinfo -1 "$zipsP/$rngZip" | grep '.tif$'  |\
   awk -F'/' -v modType="$modType" -v rngDir="$rngDir" -v scenario="$scenario" \
     -v rcp="$rcp" -v year="$year" '{
     gsub("_", " ", $(NF-1));

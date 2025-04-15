@@ -5,19 +5,27 @@
 
 setopt interactivecomments
 bindkey -e
-set -u
+#set -u
 
-proj=gpta
+proj=cluc
 pd=~/projects/$proj
-ses=ppm_rb
-wd=$pd/analysis/main/$ses
+ses=main
+wd=$pd/analysis/$ses
 src=$pd/src
+
+#----
+#---- Attach to a github repo
+#----
+
+git remote add origin git@github.com:benscarlson/cluc.git
+git push -u origin main
 
 #----
 #---- LULC data ----
 #----
 
 # Download the raw lulc data (to $pd/data/lulc/raw)
+# TODO: find the code
 
 # lulc_reproject now calculates percent habitat, coarsens, and reprojects
 $src/main/layers/lulc_reproject.r $pd/data/lulc/raw $pd/data/lulc/habmask_moll_pct
@@ -29,30 +37,24 @@ $src/main/layers/lulc_reproject.r $pd/data/lulc/raw $pd/data/lulc/habmask_moll_p
 # See apr_10_ranges.sh
 
 #----
-#---- All ppm and rangebag species
+#---- Set up project on storrs
 #----
-
-#----
-#---- Local ----
-#----
-
-setopt interactivecomments
-bindkey -e
-
-proj=gpta
-pd=~/projects/$proj
-ses=ppm_rb
-wd=$pd/analysis/main/$ses
-src=$pd/src
-
-cd $wd
 
 # Set up HPC
 wdr=${wd/$HOME/'~'}
 pdr=${pd/$HOME/'~'}
 
+ssh storrs "
+  mkdir -p $wdr
+  mkdir -p $wdr/ctfs
+  mkdir -p $wdr/data
+  mkdir -p $pdr/data/lulc
+"
 
-ssh storrs "mkdir -p $pdr/data/lulc"
+# Upload the project file
+scp $pd/cluc.Rproj storrs:$pdr
+
+# Transfer LULC data
 scp -r $pd/data/lulc/habmask_moll_pct storrs:$pdr/data/lulc
 
 #----
@@ -62,22 +64,29 @@ scp -r $pd/data/lulc/habmask_moll_pct storrs:$pdr/data/lulc
 ssh storrs
 
 # Project variables
-export proj=gpta
+export proj=cluc
 export pd=~/projects/$proj
-export ses=ppm_rb
-export wd=$pd/analysis/main/$ses
+export ses=main
+export wd=$pd/analysis/$ses
 export src=$pd/src
-
-mkdir -p $wd
-mkdir -p $wd/ctfs
-mkdir -p $wd/data
 
 cd $wd
 
-ranges=~/projects/bien_ranges/data/BIEN_Ranges_Oct18_2024
+#----
+#---- Set up the code on storrs
+#----
 
+git clone git@github.com:benscarlson/cluc.git $src
+
+
+#----
+#---- Set up the species control file
+#----
+
+ranges=/shared/mcu08001/bien_ranges/BIEN_Ranges_Apr11_2025/extracted
+
+# Note only ppm data as of now
 duckdb -c "select distinct(mod_type) from read_parquet('$ranges/manifest/*.parquet')"
-# points, rangebag, ppm
 
 duckdb <<SQL
 
@@ -90,9 +99,10 @@ to '$wd/ctfs/species.csv' (header, delimiter ',')
 
 SQL
 
-cat $wd/ctfs/species.csv | wc -l #177,863
+cat $wd/ctfs/species.csv | wc -l #78,905
 
-cp $pd/data/layer_map.csv $wd
+# To test with smaller subsets
+# see src/poc/cluc_hpc_test.sh
 
 # Slurm variables
 #n=300 is the most you can request with 12G mem-per-cpu, so max 3600GB mem?

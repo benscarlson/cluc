@@ -6,8 +6,6 @@
 #TODO: or resume to also ignore species with errors
 # Maybe pass in a value to "resume" instead of true/false?
 #TODO: save a file of input parameters
-#TODO: put layer_map.csv, land/sea mask into github, under the folder "resources"
-#       files are there, make sure this script is updated
 #TODO: make a file that installs all required packages
 
 '
@@ -159,7 +157,7 @@ rangesTfs <- file.path(.rangesP,'tifs')
 .envsP <- pd('data/lulc/habmask_moll_pct')
 envsTfs <- file.path(.envsP,'tifs')
 
-ecoP <- pd('src/config/ecoregions/GlobalEcoregions.tif') #Used as a land/sea mask
+ecoP <- pd('src/resources/ecoregions/GlobalEcoregions.tif') #Used as a land/sea mask
 
 #-- Output paths (see help)
 .outPQ <- file.path(.outP,'pq')
@@ -212,7 +210,7 @@ message('Loading data...')
 
 envsManf <- read_csv(file.path(.envsP,'manifest.csv')) %>% mutate(layer_name=gsub('.tif','',path))
 
-layerMap <- read_csv(pd('src/config/layer_map.csv'))
+layerMap <- read_csv(pd('src/resources/layer_map.csv'))
 
 #---- Files and directories ----#
 dir.create(.outPQ,showWarnings=FALSE,recursive=TRUE)

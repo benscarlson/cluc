@@ -63,10 +63,15 @@ nohup time unzip -o $rawRangesPF -d $aprRangesP/raw/ppm > unzip.log 2>&1 &
 tail unzip.log
 pgrep -fl unzip #get the process id to check the status of a
 
+#TODO: this is just clean up, can delete later
 #Need to also retreive 2611.zip since that was added after I downloaded the folder
 url2611="https://www.dropbox.com/scl/fo/byzcl9cae1k1x52wxkrj1/AJpPk9ycWFK4TtxKQXP0gIc?e=3&preview=2611.zip&rlkey=4lkgckpekvwi2ims6zkmm5x1x&st=b78p45o1&dl=1"
 time wget --progress=dot:giga -c -O $aprRangesP/raw/ppm/2611.zip "$url2611"
+# It didn't just download 2611.zip, it downloaded the entire archive. So move that and 
+# extract just the file I need
+mv $aprRangesP/raw/ppm/2611.zip $rawRangesPF
 
+time unzip -o "$rawRangesPF" "2611.zip" -d "$aprRangesP/raw/ppm"
 
 #--- Look at the results
 cd $aprRangesP/raw/ppm
@@ -84,17 +89,7 @@ zipinfo -1 BinaryMaps.zip | \
 
 # See create_manifest.sh
 
-#!!!! START HERE !!!!
-
-#----
-#---- OLD CODE below here -----
-#----
-
-
-
-
-
-
+# OLD CODE!
 
 #---- Local
 setopt interactivecomments
