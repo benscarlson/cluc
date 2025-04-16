@@ -7,8 +7,8 @@
 # Maybe pass in a value to "resume" instead of true/false?
 #TODO: save a file of input parameters
 #TODO: make a file that installs all required packages
-#TODO: suppress messages for rmpi
 #TODO: put i of n for species within a task
+
 '
 Usage:
 cluc_hpc.r <ranges> <out> [--chunksize=<chunksize>] [--cores=<cores>] [--dispersal] [--fulldomain] [--maxcell=<maxcell>] [--mpilogs=<mpilogs>] [--numrows=<numrows>] [--parMethod=<parMethod>] [--resume] [--verbose]
@@ -53,7 +53,7 @@ The script also removes pq/* and spp_complete.csv, unless resuming. If resuming,
 if(interactive()) {
 
   .pd <- here::here()
-  .wd <- file.path(.pd,'analysis/poc/errors/errors1')
+  .wd <- file.path(.pd,'analysis/poc/random_50')
   
   # Required
   #.rangesP <- file.path(.wd,'data/ranges')
@@ -141,6 +141,13 @@ if(!is.null(settingsPF)) {
   
   if(hasName(settings,'terraOptions')) {
     rlang::exec(terraOptions,!!!settings$terraOptions)
+  }
+  
+  if(hasName(settings,'basetempdir')) {
+    #NOTE: this might be unique for each iteration, not sure
+    .basetempdir <- tempfile(pattern = "cluc_", tmpdir = settings$basetempdir)
+  } else {
+    .basetempdir <- NULL
   }
 }
 
@@ -235,7 +242,9 @@ if(is.null(.parMethod)) {
   `%mypar%` <- `%do%`
 } else if(.parMethod=='mpi') {
   log_info('Registering backend doMPI')
-  library(doMPI)
+  suppressWarnings(
+    suppressPackageStartupMessages(
+      library(doMPI)))
   
   dir.create(.mpiLogP,showWarnings=FALSE,recursive=TRUE)
   #start the cluster. number of tasks, etc. are defined by slurm in the init script.
@@ -271,6 +280,12 @@ foreach(i=icount(nrow(rowGroups))) %mypar% {
     tsTask <- Sys.time()
     
     log_info('Starting chunk {i} of {nrow(rowGroups)}')
+    
+    if(!is.null(.basetempdir)) {
+      terraTmpP <- file.path(.basetempdir,paste0('iteration_',i))
+      dir.create(terraTmpP,recursive=TRUE,showWarnings = FALSE)
+      terraOptions(tempdir=terraTmpP)
+    }
     
     # Load ecoregion and envs rasters, as well as initialize range manifest here 
     # becuase they can't be exported
@@ -699,13 +714,17 @@ foreach(i=icount(nrow(rowGroups))) %mypar% {
       minutes=as.numeric(diffmin(tsTask))) %>%
       write_csv(.taskPF,append=file.exists(.taskPF))
     
-    message(glue('({hre(tsTask)} elapsed) Chunk {i} of {nrow(rowGroups)}, rows {start} through {end} complete.'))
-    message(glue('There were {nrow(resDat)} successful species and {nrow(errDat)} failed.'))
+    log_info('({hre(tsTask)} elapsed) Chunk {i} of {nrow(rowGroups)}, rows {start} through {end} complete.')
+    log_info('There were {nrow(resDat)} successful species and {nrow(errDat)} failed.')
     
     rm(resDat,errDat,envsR, eco); 
     
     gcLogMem(spp=NA)
-    #tmpFiles(remove=TRUE) #Clean up terra temporary files
+    
+    #Clean up terra temporary directory for this iteration
+    if(!is.null(.basetempdir)) {
+      unlink(terraTmpP,recursive=TRUE)
+    }
     
     return(TRUE) #Return true to keep return vector small
 
@@ -723,7 +742,11 @@ tibble(
   minutes=as.numeric(diffmin(t0))) %>%
   write_csv(.statusPF)
 
-#seems nothing after mpi.quit() is executed, so make sure this is the last code
+# Clean up the original tmp directory
+if(!is.null(.basetempdir)) {
+  unlink(settings$basetempdir,recursive=TRUE) #Clean up terra temporary files
+}
+
 if(!is.null(.parMethod) && .parMethod=='mpi') {
   closeCluster(cl)
   mpi.finalize()

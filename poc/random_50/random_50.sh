@@ -15,6 +15,7 @@ mkdir -p $wd/data
 
 cd $wd
 
+#Note: these are old ranges but still work for testing
 ranges=~/projects/bien_ranges/data/BIEN_Ranges_Oct18_2024/random_10k
 
 #---- Create the species control file
@@ -37,8 +38,9 @@ head $wd/ctfs/species.csv
 #---- Make a settings file that will apply to all script runs
 cat <<EOF > $wd/cluc_hpc_settings.yml
 terraOptions:
-  memmax: 12
-  memfrac: 0.5
+  memmax: 5
+  memfrac: 0.1
+basetempdir: /tmp/cluc
 EOF
 
 #----
@@ -64,6 +66,11 @@ rm -r $out
 out=$wd/data/scenario1
 
 $src/main/cluc_hpc.r $ranges $out -k 10 --verbose -p mc -c 5
+
+#----
+
+ls /tmp/cluc
+ls /tmp/cluc/cluc_894544cfdf18
 
 #---- Check the results
 

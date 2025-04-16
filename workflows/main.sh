@@ -102,8 +102,11 @@ SQL
 cat $wd/ctfs/species.csv | wc -l #78,905
 
 #----
-#---- Run on the hpc
+#---- Run the attribution script
 #----
+
+#TODO: maybe need to write tmp files to individual directories per task
+#TODO: maybe need to write output files to individual csv files per task
 
 # Project variables
 proj=cluc
@@ -138,7 +141,7 @@ cat <<EOF > $wd/cluc_hpc_settings.yml
 terraOptions:
   memmax: 5
   memfrac: 0.1
-  tempdir: /scratch/mcu08001/bsc23001/tmp
+basetempdir: /scratch/mcu08001/bsc23001/tmp
 EOF
 
 # Script parameters
@@ -157,13 +160,16 @@ export src scriptPars #The slurm script needs access to src and scriptPars
 sbatch $slurmPars --export=ALL $src/main/cluc_hpc_slurm.sh
 
 #---
-#--- Check process and results
+#--- Check running process and results
 #---
 
+# See cluc_hpc_check.sh for commands to examine the running process and results
+
 #--- Clean up
+
 rm -r $out
 
-# See cluc_hpc_check.sh for commands to examine the running process and results
+
 
 #!!!! OLD CODE BELOW HERE !!!!!
 
@@ -213,64 +219,3 @@ rm -r mpilogs
 
 sbatch $pars $exp $src/poc/cluc/cluc_hpc_slurm.sh
 
-#--- Check results
-squeue --me
-
-tail -25 cluc_hpc_slurm.log
-cat cluc_hpc_slurm.log | wc -l
-
-cat $wd/mpilogs/*.log
-tail -25 $wd/mpilogs/MPI_1_*.log
-tail -25 $wd/mpilogs/MPI_393_*.log
-ls $wd/mpilogs/MPI_393_*.log
-
-cat $out/spp_complete.csv | wc -l
-
-# Errors
-# TODO: distinct on the reason field
-cat $out/spp_errors.csv | wc -l
-cat $out/spp_errors.csv
-head $out/spp_errors.csv
-
-mlr --csv uniq -f reason $out/spp_errors.csv
-mlr --csv count -g reason $out/spp_errors.csv
-
-# Task Status
-mlr --csv stats1 -a mean -f minutes $out/task_status.csv
-
-# Memory use
-mlr --csv stats1 -a max -f ps_mem_gib $out/mem_use.csv
-mlr --csv stats1 -a mean -f ps_mem_gib $out/mem_use.csv
-
-ls -l /scratch/mcu08001/bsc23001/tmp | head
-df -H /scratch/mcu08001/bsc23001/tmp
-
-
-scancel 16226967
-
-ls -1 $out/attribution_ranges/tifs | wc -l
-
-du -hsc $out
-du -hsc $out/attribution_ranges/tifs
-
-# commented b/c it was ruining syntax highlighting
-duckdb -csv <<SQL
-  select * from read_parquet('$out/pq/*.parquet') limit 10
-SQL
-
-#Clean up
-rm cluc_hpc_slurm.log
-rm -r $wd/mpilogs
-rm -r $out
-
-
-sacct -u $USER --format=JobID,JobName,Start,Elapsed | grep -v '\.'
-
-#How long did a job sit before it was started?
-sacct -j 16175837 --format=Elapsed
-sacct -j 16175837 --format=Submit,Start
-
-sacct -u $USER -S 2025-03-27 --partition general \
-  --format=JobID,JobName,Partition,State,ExitCode,Elapsed,Start
-
-sacct -j 16104616 --format=JobID,JobName,Partition,State,ExitCode,Elapsed,Start

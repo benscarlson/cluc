@@ -4,6 +4,8 @@ This project follows the [breezy](https://github.com/benscarlson/breezy) philoso
 
 # analysis
 
+
+
 # data
 
 ## lulc/raw
@@ -35,4 +37,30 @@ This folder contains the code used to run the main analysis.
 ### layers
 
 ## poc
+
+### random_50
+
+Use to locally test changes in `cluc_hpc.r`.
+
+### random_10k
+
+Use to test large jobs
+
+## Info about cluc_hpc.r
+
+#### Setting the terra tmpdir directory
+
+Use `basetmpdir` in the settings file
+
+On the HPC, set the terra tmp dir to the scratch directory, for example 
+
+/scratch/mcu08001/bsc23001/tmp/cluc
+
+Each job gets a unique folder under this directory, to avoid collisions if multiple jobs are running.
+
+/scratch/mcu08001/bsc23001/tmp/cluc/cluc_98a569a1f3d9
+
+Each job has multiple iterations (each iteration of the for loop). Each iteration also needs its own folder
+
+/scratch/mcu08001/bsc23001/tmp/cluc/cluc_98a569a1f3d9/iteration_1
 
