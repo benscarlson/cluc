@@ -2,13 +2,21 @@
 
 This project follows the [breezy](https://github.com/benscarlson/breezy) philosophy for building lightweight, loosely coupled, and repeatable personal scientific workflows.
 
+A breezy project is seperated into multiple folders that hold results, data, and code. They are described further below.
+
 # analysis
+
+The analysis folder contains the results of analyses and the data required to run those analyses.
+The folder contains multiple independent sessions. Usually a session for the main analysis in the `main` folder
+and multiple sessions for proof of concept and development analyses in the `poc` folder.
 
 ## main
 
-Contains the results of the core analysis
+This session contains the results of the main analysis.
 
 ### data
+
+Contains the results of the core analysis and any intermediate datasets.
 
 - `scenario1` - attribution results for no dispersal.
 - `scenario2` - attribution results for dispersal within ecoregion.
@@ -19,8 +27,7 @@ The folder `attribution_ranges` contains tifs with a per-pixel attribution reaso
 
 ## poc
 
-Contains sessions used for testing and developing
-
+This folder contains sessions used for testing and developing.
 
 # data
 

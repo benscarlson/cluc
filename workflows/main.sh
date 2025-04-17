@@ -115,6 +115,7 @@ cat $wd/ctfs/species.csv | wc -l #78,905
 # 250, 16G, 2 hours -- did not start
 # 250, 20G, 2 hours -- configuration not availabe
 # 250, 15G, 4 hours -- error about binding too many cores. But request of 2 hours worked
+# 250, 15G, 3 hours -- sat for ~1 hr and didn't run
 n=250 # #SBATCH --ntasks
 mpc=15G # #SBATCH --mem-per-cpu
 #mem=30G
@@ -145,7 +146,7 @@ ranges=/shared/mcu08001/bien_ranges/BIEN_Ranges_Apr11_2025/extracted
 #---- Scenario 1
 out=$wd/data/scenario1
 
-scriptPars="$ranges $out -k 10 -p mpi --verbose"
+scriptPars="$ranges $out -k 10 -p mpi --verbose --resume"
 
 # Sbatch parameters
 slurmPars="--ntasks $n -p $p --time $t --mail-type $mail --mem-per-cpu $mpc \

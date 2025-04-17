@@ -46,7 +46,7 @@ awk -F',' 'NF != 1 {print NR, $0}' $out/spp_complete.csv
 
 awk -F',' 'NF != 3 {print NR, $0}' $out/spp_errors.csv
 
-scancel 16537912
+scancel 16593552
 
 #Check if scratch space
 df -h /scratch/mcu08001/bsc23001/tmp
@@ -57,6 +57,10 @@ ls /scratch/mcu08001/bsc23001/tmp/cluc_39b1132d8530de | head # Should be one per
 #Delete huge scratch file
 nohup rm -r /scratch/mcu08001/bsc23001/tmp &
 ps -u $USER | grep rm
+
+#----
+# TODO: Is it possible to have duplicate species if the pq file was written 
+#   but the species was not added to spp_complete? Might be a rare scenario.
 
 #---- main/scenario3 results ----
 # why do I have more species in attribution ranges/tifs than in spp_complete.csv?
