@@ -8,6 +8,7 @@
 #TODO: save a file of input parameters
 #TODO: make a file that installs all required packages
 #TODO: put i of n for species within a task
+#TODO: maybe need to write output files to individual csv files per task, then combine later
 
 '
 Usage:

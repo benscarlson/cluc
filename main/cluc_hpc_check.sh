@@ -8,7 +8,18 @@ cat $out/cluc_hpc_slurm.log
 tail $out/cluc_hpc_slurm.log
 
 cat $out/mpilogs/MPI_1_*
-tail $out/mpilogs/MPI_1_*
+tail $out/mpilogs/MPI_1_${USER}_16560312.log
+tail $out/mpilogs/MPI_2_*
+
+ls $out/mpilogs/MPI_1_${USER}*
+
+tail $out/mpilogs/MPI_60_${USER}_1164802.log
+
+ls $out/mpilogs | head
+
+cat $out/spp_complete.csv | wc -l #78,838 (scenario 3)
+cat $out/task_status.csv | wc -l
+cat $out/spp_errors.csv | wc -l
 
 cat $out/script_status.csv
 tail $out/task_status.csv
@@ -17,17 +28,15 @@ cat $out/spp_errors.csv
 #---- Attribution area
 
 # Sample of data
-duckdb -csv -c "select * from read_parquet('$out/pq/*.parquet') limit 10" #78,851
+duckdb -csv -c "select * from read_parquet('$out/pq/*.parquet') limit 10" #78,901
 
 # The number of species present
 duckdb -csv -c "select count(distinct spp) from read_parquet('$out/pq/*.parquet')"
 
 
-cat $out/spp_complete.csv | wc -l #78,768
-cat $out/task_status.csv | wc -l
-cat $out/spp_errors.csv | wc -l
 
-ls -1 $out/attribution_ranges/tifs | wc -l #78,884
+
+ls -1 $out/attribution_ranges/tifs | wc -l #78,901
 
 ls $out/attribution_ranges/tifs | head -10
 
@@ -42,24 +51,30 @@ scancel 16537912
 #Check if scratch space
 df -h /scratch/mcu08001/bsc23001/tmp
 
+ls /scratch/mcu08001/bsc23001/tmp #Should be one per running job, with a random directory
+ls /scratch/mcu08001/bsc23001/tmp/cluc_39b1132d8530de | head # Should be one per iteration
+
 #Delete huge scratch file
 nohup rm -r /scratch/mcu08001/bsc23001/tmp &
 ps -u $USER | grep rm
 
+#---- main/scenario3 results ----
+# why do I have more species in attribution ranges/tifs than in spp_complete.csv?
+# tifs & pq both have 78,901, but spp_complete.csv has 78,838. Maybe race conditions when appending to spp_complete.csv?
+#TODO: note these have very similar names. Are they really the same species?
+# Abarema_cochliacarpos.tif
+# Abarema_cochliocarpos.tif
+
 #---- Info about already completed jobs
 
-sacct -u $USER -S 2025-04-15 --partition general \
+sacct -u $USER -S 2025-04-16 --partition general \
   --format=JobID,JobName,Partition,State,ExitCode,Elapsed,Start
 
 #---- Info about specific jobs
-sacct -j 16537933
-seff 16537933 
+sacct -j 16558337
+seff 16558337 
 
-#TODO: look for duplicate names
-#TODO: why do I have more species in attribution ranges/tifs than in spp_complete.csv?
-#TODO: note very similar names
-# Abarema_cochliacarpos.tif
-# Abarema_cochliocarpos.tif
+sacct -j 16558337 --format=JobID,MaxRSS,MaxVMSize,Elapsed,State
 
 
 

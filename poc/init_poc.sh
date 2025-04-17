@@ -1,7 +1,7 @@
 setopt interactivecomments
 bindkey -e
 
-pd=~/projects/myproject
+pd=~/projects/cluc
 src=$pd/src
 
 #==== Templates ====

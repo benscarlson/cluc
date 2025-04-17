@@ -4,23 +4,49 @@ This project follows the [breezy](https://github.com/benscarlson/breezy) philoso
 
 # analysis
 
+## main
+
+Contains the results of the core analysis
+
+### data
+
+- `scenario1` - attribution results for no dispersal.
+- `scenario2` - attribution results for dispersal within ecoregion.
+- `scenario3` - attribution results for dispersal outside ecoregion.
+
+In all the scenario folders, the per-species and reason area results are parquet files inside `pq`.
+The folder `attribution_ranges` contains tifs with a per-pixel attribution reason.
+
+## poc
+
+Contains sessions used for testing and developing
 
 
 # data
 
-## lulc/raw
+Core data for the project. Raw data originally downloaded from elsewhere. 
+Also, data shared among different sessions. For example, the lulc is used by all sessions.
 
--   Point to the script I used to download the data
+TODO: the bien_ranges are still in the old project directory.
+
+Lulc data
+
+- `lulc/raw` - Raw lulc data
+- `lulc/habmask_moll_pct`. Converted and reprojected lulc layers
 
 ## lulc/habmask_moll_pct
 
--   `main/layers/lulc_reproject.r`
+-   `main/layers/lulc_reproject.r`. 
+
+Bin into habitat/not habitat. 
+Reproject the lulc data and coarsen 1km to 5km to match bien ranges. 
+Pixel values are percent of habitat.
 
 # docs
 
-
 # src
 
+The `src` folder contains the code housed in this repo.
 
 The main workflow is at `workflows/wf-main.sh`.
 
@@ -30,11 +56,18 @@ Installation and setup for specific components of this project are at `workflows
 
 This folder contains the code used to run the main analysis.
 
+- `cluc_hpc.r` The main script that runs the attribution analysis. See below for more detailed information.
+- `cluc_hpc_slurm.sh` The slurm script that launches the script on the hpc.
+- `cluc_hpc_check.sh` Commmands for accessing the running process and results.
+
 ### bien_ranges
 
 * `create_manifest.sh` - creates a manifest for the bien ranges data provided in zip files.
 
 ### layers
+
+-   `main/layers/lulc_reproject.r`. Bin into habitat/not habitat. Reproject the lulc data and coarsen 1km to 5km to match bien ranges. Pixel values are percent of habitat.
+-   `lulc_download.qmd`. This is the poc for downloading, it should be converted into a script.
 
 ## poc
 
@@ -46,7 +79,11 @@ Use to locally test changes in `cluc_hpc.r`.
 
 Use to test large jobs
 
-## Info about cluc_hpc.r
+## resources
+
+Reference data used in scripts. 
+
+# Info about cluc_hpc.r
 
 #### Setting the terra tmpdir directory
 

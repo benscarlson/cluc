@@ -1,0 +1,150 @@
+---
+title: "Download lulc data"
+format: 
+  html:
+    self-contained: true
+    fig-format: jpeg
+execute: 
+  echo: false
+  message: false
+  warning: false
+params:
+  pd: ~/projects/gpta
+  wd: NULL
+  
+---
+
+NOTE: This is the poc for downloading the data, it should be converted into a script.
+
+```{r setup}
+#| include: false
+
+#Note interactive() is FALSE when clicking the render button
+if(interactive()) {
+  .pd <- '~/projects/cluc'
+  #.wd <- file.path(.pd,'analysis/poc/peptrees/s1')
+  .seed <- NULL
+
+} else {
+  .pd <- params$pd
+  .wd <- params$wd
+}
+
+pd <- function(...) file.path(.pd,...)
+wd <- function(...) file.path(.wd,...)
+
+#---- Initialize Environment ----#
+if(!is.null(.seed)) {message(paste('Random seed set to',.seed)); set.seed(as.numeric(.seed))}
+
+source(pd('src/startup.r'))
+
+#---- Libraries ----
+suppressWarnings(
+  suppressPackageStartupMessages({
+    #library(git2r)
+    library(knitr)
+    library(patchwork)
+    library(stars)
+    library(terra)
+  }))
+
+tic() #For report execution time
+
+#Source all files in the auto load funs directory
+list.files(pd('src/funs/auto'),full.names=TRUE) %>% walk(source)
+source(pd('src/funs/themes.r'))
+
+theme_set(theme_eda)
+
+#---- Local functions ----
+
+#---- Local parameters ----
+
+#---- Files and folders ----
+
+
+#---- Load data ----
+message('Loading data...')
+
+
+```
+
+
+#### `r strftime(Sys.time(),format='%Y-%m-%d')`
+
+
+Get Global LULC projections from figshare
+
+```{r}
+#| eval: false
+
+library(deposits)
+
+deposits_services()
+
+mytoken <- read_file(pd('analysis/main/figshare_token.txt'))
+
+Sys.setenv("FIGSHARE"=mytoken)
+
+cli <- depositsClient$new(service='figshare')
+
+#The study is called Mapping the spatial heterogeneity of global land use and land cover from 2020 to 2100 at a 1 km resolution'
+#But the figshare deposit is called Global LULC projection dataset from 2020 to 2100 at a 1km resolution
+figName <- 'Global LULC projection dataset from 2020 to 2100 at a 1km resolution'
+
+pub <- cli$deposits_search(figName)
+
+View(pub)
+
+depId <- 23542860
+
+#Not sure if I need to run this
+cli$deposit_retrieve(23542860) #invisibly updates the cli object
+
+#individual file information is in cli$hostdata$files
+
+files <- cli$hostdata$files %>% as_tibble %>% 
+  filter(str_detect(name,'ssp1|ssp3|ssp5'))
+
+dir.create(wd('data/lulc'),recursive=TRUE)
+
+tic()
+for(i in 1:nrow(files)) {
+  #i <- 1
+  file <- files[i,]
+  message(glue('Downloading {file$name}'))
+  tic()
+  cli$deposit_download_file(file$name,depId,path=wd('data/lulc/raw'),overwrite=TRUE)
+  toc()
+}
+toc()
+
+#NOTE: I downloaded 'history_2020.tif' manually.
+```
+
+```{r finalize}
+dbDisconnect(db)
+
+warns <- warnings()
+
+if(length(warns) > 0) { cat('\n'); summary(warns); cat('\n') }
+
+repo <- git2r::repository(pd('src'))
+gitSha <- git2r::sha(git2r::repository_head(repo)) %>% substr(1,7)
+
+rmt <- git2r::remotes(repo)
+
+if(length(rmt)) {
+  #TODO: need to parse rmt when I have a repo that has a remote
+  shaTxt <- glue('[{gitSha}](https://github.com/{rmt}/tree/{gitSha})')
+} else {
+  shaTxt <- gitSha
+}
+
+```
+
+Commit when this report was run: `r shaTxt`
+
+`r strftime(Sys.time(),format='%Y-%m-%d %H:%M')`. `r Sys.timezone()`
+
+`r capture.output(toc())`

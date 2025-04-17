@@ -64,11 +64,11 @@ scp -r $pd/data/lulc/habmask_moll_pct storrs:$pdr/data/lulc
 ssh storrs
 
 # Project variables
-export proj=cluc
-export pd=~/projects/$proj
-export ses=main
-export wd=$pd/analysis/$ses
-export src=$pd/src
+proj=cluc
+pd=~/projects/$proj
+ses=main
+wd=$pd/analysis/$ses
+src=$pd/src
 
 cd $wd
 
@@ -77,7 +77,6 @@ cd $wd
 #----
 
 git clone git@github.com:benscarlson/cluc.git $src
-
 
 #----
 #---- Set up the species control file
@@ -105,51 +104,63 @@ cat $wd/ctfs/species.csv | wc -l #78,905
 #---- Run the attribution script
 #----
 
-#TODO: maybe need to write tmp files to individual directories per task
-#TODO: maybe need to write output files to individual csv files per task
-
-# Project variables
-proj=cluc
-pd=~/projects/$proj
-ses=main
-wd=$pd/analysis/$ses
-src=$pd/src
-
-cd $wd
-
 # Slurm variables
-#n=300 is the most you can request with 12G mem-per-cpu, so max 3600GB mem?
-# 400, 8G, 2 hours -- did not start after ~5 to 10 min
-# 250, 8G, 2 hours -- started immediately. 250 may be the new maximum.
+# New settings from storrs says you can only request 250 tasks.
+#  I tried requesting more and did not start after 5-10 min
+# 250, 8G, 2 hours -- started immediately.
 # 250, 10G, 2 hours -- started immediately.
 # 250, 12G, 2 hours -- started immediately.
-n=250 #
-mpc=12G # #SBATCH --mem-per-cpu=20G
+# 250, 12G, 2 hours -- started immediately.
+# 250, 15G, 3 hours -- started immediately. <--- use this one
+# 250, 16G, 2 hours -- did not start
+# 250, 20G, 2 hours -- configuration not availabe
+# 250, 15G, 4 hours -- error about binding too many cores. But request of 2 hours worked
+n=250 # #SBATCH --ntasks
+mpc=15G # #SBATCH --mem-per-cpu
 #mem=30G
 p=general
-mail=NONE
-t=2:00:00
+mail=NONE # #SBATCH --mail-type
+t=2:00:00 # #SBATCH --time
 
 #Set up the scratch directory for temporary terra files
-mkdir -p /scratch/mcu08001/bsc23001/tmp
+#mkdir -p /scratch/mcu08001/bsc23001/tmp
 
 # Make settings that will apply to all script runs in $wd
 # max: 6, frac: 0.3 died with 8G
 # max: 5, frac: 0.2 died with 8G
 # max: 5, frac: 0.2 died with 10G
+# max: 7, frac: 0.2 died with 15G
+# max: 7, frac: 0.1 completed
+# Seems I can't set memfrac above 0.1
 cat <<EOF > $wd/cluc_hpc_settings.yml
 terraOptions:
-  memmax: 5
+  memmax: 7
   memfrac: 0.1
 basetempdir: /scratch/mcu08001/bsc23001/tmp
 EOF
 
 # Script parameters
 ranges=/shared/mcu08001/bien_ranges/BIEN_Ranges_Apr11_2025/extracted
-out=$wd/data/scenario3
-#mkdir -p $out #Test this again, not sure if true: Need to create so that log files can be written here by slurm
 
-scriptPars="$ranges $out --dispersal --fulldomain -k 10 -p mpi --verbose"
+#---- Scenario 1
+out=$wd/data/scenario1
+
+scriptPars="$ranges $out -k 10 -p mpi --verbose"
+
+# Sbatch parameters
+slurmPars="--ntasks $n -p $p --time $t --mail-type $mail --mem-per-cpu $mpc \
+  --output=$out/cluc_hpc_slurm.log --error=$out/cluc_hpc_slurm.log" #  --mem $mem
+
+export src scriptPars #The slurm script needs access to src and scriptPars
+
+sbatch $slurmPars --export=ALL $src/main/cluc_hpc_slurm.sh
+
+#---- Scenario 3
+# Note: resumed the process halfway through
+
+out=$wd/data/scenario3
+
+scriptPars="$ranges $out --dispersal --fulldomain -k 10 -p mpi --verbose --resume"
 
 # Sbatch parameters
 slurmPars="--ntasks $n -p $p --time $t --mail-type $mail --mem-per-cpu $mpc \
@@ -168,6 +179,10 @@ sbatch $slurmPars --export=ALL $src/main/cluc_hpc_slurm.sh
 #--- Clean up
 
 rm -r $out
+
+#If process failed tmp might not be cleaned up
+ls /scratch/mcu08001/bsc23001/tmp
+rm -r /scratch/mcu08001/bsc23001/tmp 
 
 
 
