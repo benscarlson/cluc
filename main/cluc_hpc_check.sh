@@ -8,6 +8,7 @@ cat $out/cluc_hpc_slurm.log
 tail $out/cluc_hpc_slurm.log
 
 cat $out/mpilogs/MPI_1_*
+tail $out/mpilogs/MPI_1_*
 tail $out/mpilogs/MPI_1_${USER}_16560312.log
 tail $out/mpilogs/MPI_2_*
 
@@ -17,9 +18,9 @@ tail $out/mpilogs/MPI_60_${USER}_1164802.log
 
 ls $out/mpilogs | head
 
-cat $out/spp_complete.csv | wc -l #78,838 (scenario 3)
-cat $out/task_status.csv | wc -l
-cat $out/spp_errors.csv | wc -l
+tail -n +2 $out/spp_complete.csv | wc -l #78,906 (scenario 1), 78,837 (scenario 3)
+tail -n +2 $out/task_status.csv | wc -l
+tail -n +2 $out/spp_errors.csv | wc -l
 
 cat $out/script_status.csv
 tail $out/task_status.csv
@@ -28,9 +29,9 @@ cat $out/spp_errors.csv
 #---- Attribution area
 
 # Sample of data
-duckdb -csv -c "select * from read_parquet('$out/pq/*.parquet') limit 10" #78,901
+duckdb -csv -c "select * from read_parquet('$out/pq/*.parquet') limit 10" #
 
-# The number of species present
+# The number of species present.  #78,901 (scenario 1), 78,901 (scenario 3)
 duckdb -csv -c "select count(distinct spp) from read_parquet('$out/pq/*.parquet')"
 
 
